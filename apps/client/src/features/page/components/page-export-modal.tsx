@@ -92,6 +92,7 @@ function ExportFormatSelection({ format, onChange }: ExportFormatSelection) {
       data={[
         { value: "markdown", label: "Markdown" },
         { value: "html", label: "HTML" },
+        { value: "docusaurus", label: "Docusaurus" },
       ]}
       defaultValue={format}
       onChange={onChange}

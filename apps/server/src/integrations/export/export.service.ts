@@ -86,6 +86,23 @@ export class ExportService {
       return turndown(newPageHtml);
     }
 
+    if (format === ExportFormat.Docusaurus) {
+      const newPageHtml = pageHtml.replace(
+        /<colgroup[^>]*>[\s\S]*?<\/colgroup>/gim,
+        '',
+      );
+      const markdownContent = turndown(newPageHtml);
+      
+      // Add Docusaurus frontmatter
+      const frontmatter = `---
+title: ${getPageTitle(page.title)}
+sidebar_position: 1
+---
+
+`;
+      return frontmatter + markdownContent;
+    }
+
     return;
   }
 

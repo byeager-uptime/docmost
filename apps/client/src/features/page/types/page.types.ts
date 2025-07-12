@@ -77,4 +77,5 @@ export interface IExportPageParams {
 export enum ExportFormat {
   HTML = "html",
   Markdown = "markdown",
+  Docusaurus = "docusaurus",
 }

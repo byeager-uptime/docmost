@@ -33,6 +33,8 @@ import {
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
+import { DocusaurusService } from '../services/docusaurus.service';
+import { DocusaurusConfigDto } from '../dto/docusaurus-config.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -42,6 +44,7 @@ export class WorkspaceController {
     private readonly workspaceInvitationService: WorkspaceInvitationService,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private environmentService: EnvironmentService,
+    private readonly docusaurusService: DocusaurusService,
   ) {}
 
   @Public()
@@ -301,5 +304,195 @@ export class WorkspaceController {
       );
 
     return { inviteLink };
+  }
+
+  // Docusaurus Integration Endpoints
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/config')
+  async getDocusaurusConfig(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getDocusaurusConfig(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/config/update')
+  async updateDocusaurusConfig(
+    @Body() configDto: DocusaurusConfigDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.updateDocusaurusConfig(workspace.id, configDto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/validate')
+  async validateDocusaurusSetup(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.validateDocusaurusSetup(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/mappings')
+  async getSpaceMappings(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getSpaceMappings(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/mappings/update')
+  async updateSpaceMapping(
+    @Body() body: { spaceId: string; mapping: any },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.updateSpaceMapping(
+      workspace.id,
+      body.spaceId,
+      body.mapping
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/export')
+  async exportToDocusaurus(
+    @Body() body: { 
+      contentId: string; 
+      contentType: 'page' | 'space'; 
+      options?: { includeChildren?: boolean; includeAttachments?: boolean }
+    },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.exportContentToDocusaurus(
+      workspace.id,
+      body.contentId,
+      body.contentType,
+      body.options || {}
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/analyze')
+  async analyzeContentForCategorization(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.suggestCategories(workspace.id);
+  }
+
+  // Phase 4: Automated Sync Endpoints
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/sync/manual')
+  async triggerManualSync(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.triggerManualSync(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/sync/history')
+  async getSyncHistory(
+    @Body() body: { limit?: number },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getSyncHistory(workspace.id, body.limit || 10);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/sync/status')
+  async getLastSyncStatus(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getLastSyncStatus(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/sync/status/detailed')
+  async getDetailedSyncStatus(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getDetailedSyncStatus(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/sync/report')
+  async generateSyncReport(
+    @Body() body: { syncId: string },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getSyncReport(workspace.id, body.syncId);
   }
 }
