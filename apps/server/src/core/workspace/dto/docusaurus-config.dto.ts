@@ -48,6 +48,10 @@ export class DocusaurusConfigDto {
   @IsString()
   siteTitle?: string;
 
+  @IsOptional()
+  @IsString()
+  landingPageId?: string;
+
   @ValidateNested()
   @Type(() => DocusaurusAutoSyncDto)
   autoSync: DocusaurusAutoSyncDto;

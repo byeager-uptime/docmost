@@ -12,6 +12,7 @@ import {
   getSyncHistory,
   getLastSyncStatus,
   getDetailedSyncStatus,
+  getAvailablePages,
 } from "../services/docusaurus.service";
 import { DocusaurusConfig, DocusaurusSpaceMapping, SyncResult } from "../types/docusaurus.types";
 
@@ -193,5 +194,12 @@ export function useDetailedSyncStatus() {
     queryKey: ["docusaurus-detailed-sync-status"],
     queryFn: getDetailedSyncStatus,
     refetchInterval: 30000, // Refresh every 30 seconds
+  });
+}
+
+export function useAvailablePages() {
+  return useQuery({
+    queryKey: ["docusaurus-available-pages"],
+    queryFn: getAvailablePages,
   });
 }

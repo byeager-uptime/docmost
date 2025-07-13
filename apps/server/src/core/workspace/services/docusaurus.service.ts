@@ -22,6 +22,7 @@ export interface DocusaurusConfig {
   sitePath: string;
   baseUrl: string;
   siteTitle?: string;
+  landingPageId?: string;
   autoSync: {
     enabled: boolean;
     interval: DocusaurusSyncInterval;
@@ -182,6 +183,16 @@ export class DocusaurusService implements OnModuleInit {
 
     // Update scheduled sync based on new configuration
     await this.updateScheduledSync(workspaceId, config);
+
+    // If landing page is set, create the landing page file
+    if (config.landingPageId) {
+      try {
+        await this.createLandingPageFile(workspaceId, config.landingPageId);
+      } catch (error) {
+        this.logger.warn('Failed to create landing page file:', error);
+        // Don't throw error - config was saved successfully
+      }
+    }
 
     this.logger.log(`Updated Docusaurus config for workspace ${workspaceId}`);
     return config;
@@ -2085,6 +2096,261 @@ This page has been moved. Please refer to the main content at:
         },
         syncResult: null,
       };
+    }
+  }
+
+  // Phase 5: Landing Page Management
+
+  async getAvailablePagesForLanding(workspaceId: string) {
+    try {
+      // Get all pages from all spaces in the workspace
+      const spaces = await this.db
+        .selectFrom('spaces')
+        .select(['id', 'name'])
+        .where('workspaceId', '=', workspaceId)
+        .execute();
+
+      const pagesPromises = spaces.map(async (space) => {
+        const pages = await this.db
+          .selectFrom('pages')
+          .select(['id', 'title', 'spaceId'])
+          .where('spaceId', '=', space.id)
+          .where('parentPageId', 'is', null) // Only root pages for landing page
+          .orderBy('title')
+          .execute();
+
+        return pages.map(page => ({
+          id: page.id,
+          title: page.title,
+          slug: page.id, // Use page id as slug fallback
+          spaceId: page.spaceId,
+          spaceName: space.name,
+          displayText: `${space.name}: ${page.title}`,
+        }));
+      });
+
+      const allPages = await Promise.all(pagesPromises);
+      return allPages.flat();
+
+    } catch (error) {
+      this.logger.error('Failed to get available pages for landing:', error);
+      throw new BadRequestException('Failed to fetch available pages');
+    }
+  }
+
+  async setLandingPage(workspaceId: string, pageId: string) {
+    try {
+      const config = await this.getDocusaurusConfig(workspaceId);
+      if (!config.enabled) {
+        throw new BadRequestException('Docusaurus integration is not enabled');
+      }
+
+      // Verify the page exists and belongs to this workspace
+      const page = await this.db
+        .selectFrom('pages')
+        .innerJoin('spaces', 'spaces.id', 'pages.spaceId')
+        .select(['pages.id', 'pages.title'])
+        .where('pages.id', '=', pageId)
+        .where('spaces.workspaceId', '=', workspaceId)
+        .executeTakeFirst();
+
+      if (!page) {
+        throw new BadRequestException('Page not found or does not belong to this workspace');
+      }
+
+      // Update the config with the landing page
+      const updatedConfig = { ...config, landingPageId: pageId };
+      await this.updateDocusaurusConfig(workspaceId, updatedConfig);
+
+      // Export the landing page to create the index.md file
+      await this.createLandingPageFile(workspaceId, pageId);
+
+      return { success: true, message: `Landing page set to: ${page.title}` };
+
+    } catch (error) {
+      this.logger.error('Failed to set landing page:', error);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Failed to set landing page');
+    }
+  }
+
+  private async createLandingPageFile(workspaceId: string, pageId: string) {
+    try {
+      const config = await this.getDocusaurusConfig(workspaceId);
+      
+      // Get the page data
+      const page = await this.db
+        .selectFrom('pages')
+        .selectAll()
+        .where('id', '=', pageId)
+        .executeTakeFirst();
+
+      if (!page) {
+        throw new BadRequestException('Page not found');
+      }
+      
+      // Export the page content
+      const exportResult = await this.exportService.exportPage(ExportFormat.Markdown, page, true);
+      
+      // Create the landing page content with proper frontmatter
+      const landingContent = `---
+slug: /
+sidebar_position: 1
+---
+
+${exportResult}`;
+
+      // Write to index.md in the docs root
+      const indexPath = path.join(config.sitePath, 'docs', 'index.md');
+      await writeFile(indexPath, landingContent, 'utf8');
+
+      this.logger.log(`Landing page created: ${indexPath}`);
+
+    } catch (error) {
+      this.logger.error('Failed to create landing page file:', error);
+      throw error;
+    }
+  }
+
+  // Branding Configuration Methods
+
+  async applyBrandingToDocusaurus(workspaceId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const config = await this.getDocusaurusConfig(workspaceId);
+      if (!config || !config.enabled) {
+        throw new BadRequestException('Docusaurus integration is not enabled');
+      }
+
+      // Get workspace branding configuration
+      const workspace = await this.workspaceService.findById(workspaceId);
+      const workspaceSettings = (workspace?.settings as any) || {};
+      const brandingConfig = workspaceSettings.brandingConfig;
+
+      if (!brandingConfig) {
+        return { success: true, message: 'No branding configuration found, using defaults' };
+      }
+
+      // Update the Docusaurus config file with branding
+      await this.updateDocusaurusConfigFile(config.sitePath, brandingConfig);
+
+      this.logger.log(`Applied branding to Docusaurus for workspace ${workspaceId}`);
+      return { success: true, message: 'Branding applied to Docusaurus successfully' };
+
+    } catch (error) {
+      this.logger.error('Failed to apply branding to Docusaurus:', error);
+      throw new BadRequestException(error instanceof Error ? error.message : 'Failed to apply branding');
+    }
+  }
+
+  private async updateDocusaurusConfigFile(sitePath: string, brandingConfig: any) {
+    const configPath = path.join(sitePath, 'docusaurus.config.ts');
+    
+    try {
+      const configContent = await readFile(configPath, 'utf8');
+      
+      // Parse and modify the config
+      let updatedConfig = configContent;
+
+      // Update title
+      if (brandingConfig.siteName) {
+        updatedConfig = updatedConfig.replace(
+          /title:\s*["'].*?["']/,
+          `title: "${brandingConfig.siteName}"`
+        );
+        
+        // Update navbar title
+        updatedConfig = updatedConfig.replace(
+          /title:\s*["']Docmost["']/,
+          `title: "${brandingConfig.siteName}"`
+        );
+      }
+
+      // Update logo
+      if (brandingConfig.logo) {
+        // Convert relative logo path to absolute URL
+        let logoUrl = brandingConfig.logo;
+        if (!logoUrl.startsWith('http')) {
+          // Extract filename from the path (e.g., "workspaceId/workspace-logo/filename.png" -> "filename.png")
+          const pathParts = brandingConfig.logo.split('/');
+          const filename = pathParts[pathParts.length - 1];
+          logoUrl = `http://localhost:3000/api/attachments/img/workspace-logo/${filename}`;
+        }
+        
+        // Enable logo in navbar
+        updatedConfig = updatedConfig.replace(
+          /\/\/logo:\s*\{[\s\S]*?\/\/\}/g,
+          `logo: {
+        alt: "${brandingConfig.siteName || 'Logo'}",
+        src: "${logoUrl}",
+      }`
+        );
+        
+        // Also replace existing logo configuration
+        updatedConfig = updatedConfig.replace(
+          /logo:\s*\{[^}]*\}/g,
+          `logo: {
+        alt: "${brandingConfig.siteName || 'Logo'}",
+        src: "${logoUrl}",
+      }`
+        );
+
+        // Update navbar title based on hideSiteName setting
+        if (brandingConfig.hideSiteName) {
+          // Hide the navbar title when hideSiteName is true
+          updatedConfig = updatedConfig.replace(
+            /title:\s*["'][^"']*["']/g,
+            'title: ""'
+          );
+          
+          // Also remove navbar title specifically
+          updatedConfig = updatedConfig.replace(
+            /navbar:\s*\{[\s\S]*?title:\s*["'][^"']*["']/,
+            (match) => match.replace(/title:\s*["'][^"']*["']/, 'title: ""')
+          );
+        }
+      }
+
+      // Update navigation links
+      if (brandingConfig.navigationLinks && brandingConfig.navigationLinks.length > 0) {
+        const navItems = brandingConfig.navigationLinks.map((link: any) => {
+          if (link.external) {
+            return `{
+          href: "${link.url}",
+          label: "${link.label}",
+          position: "right",
+        }`;
+          } else {
+            return `{
+          to: "${link.url}",
+          label: "${link.label}",
+          position: "right",
+        }`;
+          }
+        }).join(',\n        ');
+
+        // Replace the existing items array
+        const itemsRegex = /items:\s*\[[\s\S]*?\]/;
+        updatedConfig = updatedConfig.replace(
+          itemsRegex,
+          `items: [
+        {
+          type: "docSidebar",
+          sidebarId: "tutorialSidebar",
+          position: "right",
+          label: "Docs",
+        },
+        ${navItems}
+      ]`
+        );
+      }
+
+      // Write the updated config back
+      await writeFile(configPath, updatedConfig, 'utf8');
+      
+      this.logger.log(`Updated Docusaurus config file: ${configPath}`);
+
+    } catch (error) {
+      this.logger.error('Failed to update Docusaurus config file:', error);
+      throw error;
     }
   }
 }

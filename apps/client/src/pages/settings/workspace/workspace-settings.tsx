@@ -1,5 +1,6 @@
 import SettingsTitle from "@/components/settings/settings-title.tsx";
 import WorkspaceNameForm from "@/features/workspace/components/settings/components/workspace-name-form";
+import WorkspaceBrandingSettings from "@/features/workspace/components/workspace-branding-settings";
 import { useTranslation } from "react-i18next";
 import { getAppName, isCloud } from "@/lib/config.ts";
 import { Helmet } from "react-helmet-async";
@@ -15,6 +16,9 @@ export default function WorkspaceSettings() {
       </Helmet>
       <SettingsTitle title={t("General")} />
       <WorkspaceNameForm />
+
+      <Divider my="xl" />
+      <WorkspaceBrandingSettings />
 
       {isCloud() && (
         <>

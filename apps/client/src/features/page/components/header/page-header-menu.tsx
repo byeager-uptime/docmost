@@ -44,6 +44,7 @@ import { PageStateSegmentedControl } from "@/features/user/components/page-state
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import ShareModal from "@/features/share/components/share-modal.tsx";
+import DocusaurusPublishButton from "@/features/page/components/docusaurus-publish-button.tsx";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -52,6 +53,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { t } = useTranslation();
   const toggleAside = useToggleAside();
   const [yjsConnectionStatus] = useAtom(yjsConnectionStatusAtom);
+  const { pageSlug } = useParams();
 
   useHotkeys(
     [
@@ -110,6 +112,13 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
           <IconList size={20} stroke={2} />
         </ActionIcon>
       </Tooltip>
+
+      {!readOnly && (
+        <DocusaurusPublishButton
+          pageId={extractPageSlugId(pageSlug)}
+          type="page"
+        />
+      )}
 
       <PageActionMenu readOnly={readOnly} />
     </>
@@ -215,6 +224,14 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
           >
             {t("Export")}
           </Menu.Item>
+
+          {!readOnly && (
+            <DocusaurusPublishButton
+              pageId={page?.id}
+              type="page"
+              asMenuItem={true}
+            />
+          )}
 
           <Menu.Item
             leftSection={<IconPrinter size={16} />}

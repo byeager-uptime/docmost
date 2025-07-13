@@ -22,6 +22,7 @@ export interface DocusaurusConfig {
   sitePath: string;
   baseUrl: string;
   siteTitle?: string;
+  landingPageId?: string;
   autoSync: DocusaurusAutoSync;
   spaceMappings: DocusaurusSpaceMapping[];
 }

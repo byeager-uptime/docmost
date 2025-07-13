@@ -86,3 +86,15 @@ export async function getDetailedSyncStatus(): Promise<{
   const req = await api.post("/workspace/docusaurus/sync/status/detailed");
   return req.data;
 }
+
+export async function getAvailablePages(): Promise<Array<{
+  id: string;
+  title: string;
+  slug: string;
+  spaceId: string;
+  spaceName: string;
+  displayText: string;
+}>> {
+  const req = await api.post("/workspace/docusaurus/pages");
+  return req.data;
+}

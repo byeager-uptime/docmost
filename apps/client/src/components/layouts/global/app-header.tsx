@@ -1,4 +1,4 @@
-import { Badge, Group, Text, Tooltip } from "@mantine/core";
+import { Badge, Group, Text, Tooltip, Image, Anchor } from "@mantine/core";
 import classes from "./app-header.module.css";
 import React from "react";
 import TopMenu from "@/components/layouts/global/top-menu.tsx";
@@ -14,6 +14,7 @@ import SidebarToggle from "@/components/ui/sidebar-toggle-button.tsx";
 import { useTranslation } from "react-i18next";
 import useTrial from "@/ee/hooks/use-trial.tsx";
 import { isCloud } from "@/lib/config.ts";
+import { useBrandingConfig } from "@/features/workspace/hooks/use-branding";
 
 const links = [{ link: APP_ROUTE.HOME, label: "Home" }];
 
@@ -25,6 +26,8 @@ export function AppHeader() {
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const toggleDesktop = useToggleSidebar(desktopSidebarAtom);
   const { isTrial, trialDaysLeft } = useTrial();
+  const { data: brandingConfig } = useBrandingConfig();
+
 
   const isHomeRoute = location.pathname.startsWith("/home");
 
@@ -62,15 +65,37 @@ export function AppHeader() {
             </>
           )}
 
-          <Text
-            size="lg"
-            fw={600}
-            style={{ cursor: "pointer", userSelect: "none" }}
-            component={Link}
-            to="/home"
-          >
-            Docmost
-          </Text>
+          {brandingConfig?.logo ? (
+            <Group gap="xs" style={{ cursor: "pointer" }} component={Link} to="/home">
+              <Image
+                src={brandingConfig.logo.startsWith('http') 
+                  ? brandingConfig.logo 
+                  : `http://localhost:3000/api/attachments/img/workspace-logo/${brandingConfig.logo.split('/').pop()}`
+                }
+                h={30}
+                w="auto"
+              />
+              {brandingConfig && !brandingConfig.hideSiteName && (
+                <Text
+                  size="lg"
+                  fw={600}
+                  style={{ userSelect: "none" }}
+                >
+                  {brandingConfig?.siteName || "Docmost"}
+                </Text>
+              )}
+            </Group>
+          ) : (
+            <Text
+              size="lg"
+              fw={600}
+              style={{ cursor: "pointer", userSelect: "none" }}
+              component={Link}
+              to="/home"
+            >
+              {brandingConfig?.siteName || "Docmost"}
+            </Text>
+          )}
 
           <Group ml={50} gap={5} className={classes.links} visibleFrom="sm">
             {items}

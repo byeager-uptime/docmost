@@ -35,6 +35,7 @@ import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
 import { DocusaurusService } from '../services/docusaurus.service';
 import { DocusaurusConfigDto } from '../dto/docusaurus-config.dto';
+import { BrandingConfigDto, UpdateBrandingConfigDto } from '../dto/branding-config.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -494,5 +495,121 @@ export class WorkspaceController {
     }
 
     return await this.docusaurusService.getSyncReport(workspace.id, body.syncId);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/pages')
+  async getAvailablePages(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.getAvailablePagesForLanding(workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('docusaurus/landing-page')
+  async setLandingPage(
+    @Body() body: { pageId: string },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.setLandingPage(workspace.id, body.pageId);
+  }
+
+  // Branding Configuration Endpoints
+
+  @HttpCode(HttpStatus.OK)
+  @Post('branding/config')
+  async getBrandingConfig(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    const currentSettings = (workspace?.settings as any) || {};
+    const defaultConfig = {
+      logo: workspace.logo || null,
+      siteName: workspace.name,
+      hideSiteName: false,
+      navigationLinks: [],
+      showDocmostBranding: true,
+    };
+    
+    // Merge saved config with defaults to ensure all fields are present
+    const savedConfig = currentSettings.brandingConfig || {};
+    return {
+      ...defaultConfig,
+      ...savedConfig,
+    };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('branding/config/update')
+  async updateBrandingConfig(
+    @Body() body: BrandingConfigDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    const currentSettings = (workspace?.settings as any) || {};
+    const updatedSettings = {
+      ...currentSettings,
+      brandingConfig: body,
+    };
+
+    // Also update the workspace logo field for backwards compatibility
+    const updateData: any = {
+      settings: updatedSettings,
+    };
+
+    if (body.logo) {
+      updateData.logo = body.logo;
+    }
+
+    await this.workspaceService.update(workspace.id, updateData);
+
+    // Apply branding to Docusaurus if it's enabled
+    try {
+      const docusaurusConfig = await this.docusaurusService.getDocusaurusConfig(workspace.id);
+      if (docusaurusConfig && docusaurusConfig.enabled) {
+        await this.docusaurusService.applyBrandingToDocusaurus(workspace.id);
+      }
+    } catch (error) {
+      // Log the error but don't fail the branding config update
+      console.error('Failed to apply branding to Docusaurus:', error);
+    }
+
+    return body;
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('branding/apply')
+  async applyBrandingToDocusaurus(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    return await this.docusaurusService.applyBrandingToDocusaurus(workspace.id);
   }
 }

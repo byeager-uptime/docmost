@@ -31,6 +31,7 @@ import {
   useSyncHistory,
   useLastSyncStatus,
   useDetailedSyncStatus,
+  useAvailablePages,
 } from "@/features/workspace/queries/docusaurus.query";
 import { 
   DocusaurusConfig, 
@@ -41,6 +42,7 @@ import {
   SyncResult
 } from "@/features/workspace/types/docusaurus.types";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
+import { DocusaurusBatchPublishDropdown } from "@/features/page/components/docusaurus-batch-publish-button";
 
 export default function DocusaurusSettings() {
   const { t } = useTranslation();
@@ -53,6 +55,7 @@ export default function DocusaurusSettings() {
   const { data: syncHistory } = useSyncHistory();
   const { data: lastSyncStatus } = useLastSyncStatus();
   const { data: detailedSyncStatus } = useDetailedSyncStatus();
+  const { data: availablePages } = useAvailablePages();
   
   const updateConfigMutation = useUpdateDocusaurusConfig();
   const validateMutation = useValidateDocusaurusSetup();
@@ -66,6 +69,7 @@ export default function DocusaurusSettings() {
       sitePath: "",
       baseUrl: "",
       siteTitle: "",
+      landingPageId: "",
       autoSync: {
         enabled: false,
         interval: DocusaurusSyncInterval.HOURLY,
@@ -228,6 +232,20 @@ export default function DocusaurusSettings() {
                 placeholder="Company Documentation"
                 {...form.getInputProps("siteTitle")}
                 disabled={!form.values.enabled}
+              />
+
+              <Select
+                label="Landing Page (Optional)"
+                description="Choose which page becomes the homepage of your documentation site"
+                placeholder="Select a page to use as landing page"
+                data={availablePages?.map(page => ({
+                  value: page.id,
+                  label: page.displayText
+                })) || []}
+                searchable
+                clearable
+                {...form.getInputProps("landingPageId")}
+                disabled={!form.values.enabled || !availablePages || availablePages.length === 0}
               />
             </Stack>
           </Card>
@@ -681,6 +699,49 @@ export default function DocusaurusSettings() {
                 </Text>
               </Card>
             )}
+          </Stack>
+        </>
+      )}
+
+      {form.values.enabled && spaces?.items && spaces.items.length > 0 && (
+        <>
+          <Divider my="xl" />
+          
+          <SettingsTitle title="Batch Operations" />
+          
+          <Text size="sm" c="dimmed" mb="md">
+            Perform bulk operations on multiple pages and spaces at once
+          </Text>
+
+          <Stack gap="md">
+            <Card shadow="sm" padding="lg" radius="md" withBorder>
+              <Text size="sm" fw={500} mb="md">Bulk Publishing</Text>
+              
+              <Group justify="space-between" mb="md">
+                <div>
+                  <Text size="sm">
+                    Publish multiple pages or entire spaces to Docusaurus simultaneously
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Available spaces: {spaces.items.length} • Total pages: Select spaces to see page count
+                  </Text>
+                </div>
+                
+                <DocusaurusBatchPublishDropdown
+                  items={spaces.items.map(space => ({
+                    id: space.id,
+                    title: space.name,
+                    type: "space" as const
+                  }))}
+                  size="sm"
+                />
+              </Group>
+
+              <Alert icon={<IconInfoCircle size={16} />} color="blue">
+                Batch operations will respect your configured space mappings and export settings. 
+                Large batches may take several minutes to complete.
+              </Alert>
+            </Card>
           </Stack>
         </>
       )}
