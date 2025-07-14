@@ -4,13 +4,14 @@ import { WorkspaceController } from './controllers/workspace.controller';
 import { SpaceModule } from '../space/space.module';
 import { WorkspaceInvitationService } from './services/workspace-invitation.service';
 import { DocusaurusService } from './services/docusaurus.service';
+import { EnhancedContentAnalysisService } from './services/enhanced-content-analysis.service';
 import { TokenModule } from '../auth/token.module';
 import { ExportModule } from '../../integrations/export/export.module';
 
 @Module({
   imports: [SpaceModule, TokenModule, ExportModule],
   controllers: [WorkspaceController],
-  providers: [WorkspaceService, WorkspaceInvitationService, DocusaurusService],
+  providers: [WorkspaceService, WorkspaceInvitationService, DocusaurusService, EnhancedContentAnalysisService],
   exports: [WorkspaceService, DocusaurusService],
 })
 export class WorkspaceModule {}

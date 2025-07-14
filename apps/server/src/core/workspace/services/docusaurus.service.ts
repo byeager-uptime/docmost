@@ -11,6 +11,7 @@ import { CronJob } from 'cron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
+import { EnhancedContentAnalysisService } from './enhanced-content-analysis.service';
 
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
@@ -91,6 +92,12 @@ export interface ContentAnalysisStats {
   averageClusterSize: number;
   hierarchicalPages: number;
   orphanPages: number;
+  // Enhanced metrics
+  semanticClusters?: number;
+  crossSpaceReferences?: number;
+  contentDensity?: number;
+  averageContentLength?: number;
+  lastAnalysisTime?: string;
 }
 
 // Phase 4: Sync Service Types
@@ -139,6 +146,7 @@ export class DocusaurusService implements OnModuleInit {
     private readonly pageRepo: PageRepo,
     @InjectKysely() private readonly db: KyselyDB,
     private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly enhancedAnalysisService: EnhancedContentAnalysisService,
   ) {}
 
   async onModuleInit() {
@@ -838,6 +846,8 @@ This page has been moved. Please refer to the main content at:
     hierarchy: ContentHierarchy;
     stats: ContentAnalysisStats;
   }> {
+    this.logger.log(`Starting enhanced content analysis for workspace ${workspaceId}`);
+    
     const spaces = await this.db
       .selectFrom('spaces')
       .selectAll()
@@ -858,18 +868,23 @@ This page has been moved. Please refer to the main content at:
       .where('pages.workspaceId', '=', workspaceId)
       .execute();
 
-    // Analyze content patterns and relationships
-    const contentAnalysis = this.performContentAnalysis(allPages);
+    // Use enhanced AI-powered content analysis
+    const contentAnalysis = await this.enhancedAnalysisService.performIntelligentAnalysis(allPages);
     
-    // Generate category suggestions based on analysis
-    const suggestions = this.generateCategorySuggestions(spaces, allPages, contentAnalysis);
+    // Generate intelligent category suggestions
+    const suggestions = await this.enhancedAnalysisService.generateIntelligentSuggestions(
+      spaces, 
+      allPages, 
+      contentAnalysis
+    );
     
     // Build hierarchical structure
     const hierarchy = this.buildContentHierarchy(spaces, allPages);
     
-    // Generate statistics
-    const stats = this.generateContentStats(spaces, allPages, contentAnalysis);
-
+    // Generate enhanced statistics
+    const stats = this.generateEnhancedContentStats(spaces, allPages, contentAnalysis);
+    
+    this.logger.log(`Enhanced analysis complete: ${suggestions.length} suggestions, ${contentAnalysis.clusters.length} clusters`);
     return { suggestions, hierarchy, stats };
   }
 
@@ -1228,6 +1243,67 @@ This page has been moved. Please refer to the main content at:
         !pages.some(other => other.parentPageId === p.id)
       ).length,
     };
+  }
+
+  private generateEnhancedContentStats(
+    spaces: any[],
+    pages: any[],
+    analysis: ContentAnalysis,
+  ): ContentAnalysisStats {
+    const clusters = analysis.clusters;
+    const relationships = analysis.relationships;
+    
+    // Enhanced metrics with semantic analysis
+    const semanticClusters = clusters.filter(c => c.similarity > 0.6);
+    const crossSpaceRelationships = relationships.filter(r => {
+      const parentPage = pages.find(p => p.id === r.parentId);
+      const childPage = pages.find(p => p.id === r.childId);
+      return parentPage && childPage && parentPage.spaceId !== childPage.spaceId;
+    });
+
+    return {
+      totalSpaces: spaces.length,
+      totalPages: pages.length,
+      averagePagesPerSpace: Math.round(pages.length / Math.max(spaces.length, 1)),
+      topKeywords: analysis.keywords.slice(0, 15), // More keywords for better insights
+      totalClusters: clusters.length,
+      averageClusterSize: Math.round(
+        clusters.reduce((sum, cluster) => sum + cluster.pages.length, 0) / 
+        Math.max(clusters.length, 1)
+      ),
+      hierarchicalPages: pages.filter(p => p.parentPageId).length,
+      orphanPages: pages.filter(p => !p.parentPageId && 
+        !pages.some(other => other.parentPageId === p.id)
+      ).length,
+      // Enhanced metrics
+      semanticClusters: semanticClusters.length,
+      crossSpaceReferences: crossSpaceRelationships.length,
+      contentDensity: this.calculateContentDensity(pages),
+      averageContentLength: this.calculateAverageContentLength(pages),
+      lastAnalysisTime: new Date().toISOString(),
+    };
+  }
+
+  private calculateContentDensity(pages: any[]): number {
+    if (pages.length === 0) return 0;
+    
+    const totalContentLength = pages.reduce((sum, page) => {
+      const content = this.extractTextFromContent(page.content || '{}');
+      return sum + content.length;
+    }, 0);
+    
+    return Math.round(totalContentLength / pages.length);
+  }
+
+  private calculateAverageContentLength(pages: any[]): number {
+    if (pages.length === 0) return 0;
+    
+    const contentLengths = pages.map(page => {
+      const content = this.extractTextFromContent(page.content || '{}');
+      return content.split(/\s+/).length; // Word count
+    });
+    
+    return Math.round(contentLengths.reduce((sum, length) => sum + length, 0) / pages.length);
   }
 
   // API endpoint method
